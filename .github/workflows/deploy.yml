@@ -74,6 +74,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The repository is public. These identifiers aren't secrets, but masking
+      # them keeps the subscription and directory out of the public logs.
+      - name: Mask Azure identifiers
+        run: |
+          echo "::add-mask::$ARM_SUBSCRIPTION_ID"
+          echo "::add-mask::$ARM_TENANT_ID"
+          echo "::add-mask::$ARM_CLIENT_ID"
+
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -100,7 +108,7 @@ jobs:
           url=$(terraform output -raw app_url)
 
           # The app scales to zero, so the first request waits for a cold start.
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS "$url/healthz" >/dev/null; then break; fi
             sleep 10
           done

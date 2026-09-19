@@ -71,15 +71,16 @@ Prices are pay-as-you-go retail rates for East US 2 from the Azure Retail Prices
 
 **Prerequisites:** Terraform 1.9+, Azure CLI, an Azure subscription where you're Owner, and a fork of this repository.
 
-1. **Bootstrap** (once). Creates remote state, the lab resource group, the GitHub OIDC identity and its scoped permissions, and the budget.
+1. **Bootstrap** (once). Creates remote state, the lab resource group, the GitHub OIDC identity and its scoped permissions, and the budget. Create the GitHub repository first: GitHub identifies repositories to Azure by immutable numeric IDs (for example `repo:owner@123/name@456:environment:lab`), so the trust is bound to this exact repository, and a deleted and recreated one with the same name can't inherit it.
    ```bash
    az login
    cd bootstrap
    terraform init
-   terraform apply -var='budget_contact_emails=["you@example.com"]' \
-                   -var='github_repository=<owner>/<repo>'
-   ```
-   GitHub identifies repositories to Azure by immutable numeric IDs (for example `repo:owner@123/name@456:environment:lab`), so a deleted and recreated repository with the same name can't inherit this trust. Create the repository before running bootstrap so the IDs exist.
+   terraform apply \
+     -var='budget_contact_emails=["you@example.com"]' \
+     -var='github_repository=<owner>/<repo>' \
+     -var="github_repository_owner_id=$(gh api repos/<owner>/<repo> --jq .owner.id)" \
+     -var="github_repository_id=$(gh api repos/<owner>/<repo> --jq .id)"
    ```
 2. **Configure GitHub.** Create an environment named `lab`, then add these repository variables from the bootstrap outputs. None of them are secrets.
 

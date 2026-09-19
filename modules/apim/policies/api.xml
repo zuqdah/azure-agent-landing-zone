@@ -1,0 +1,21 @@
+<policies>
+    <inbound>
+        <base />
+        <set-backend-service backend-id="azure-openai" />
+        <!-- The caller's gateway key is only meaningful to API Management.
+             Remove it so it's never forwarded to the backend. -->
+        <set-header name="api-key" exists-action="delete" />
+        <!-- Authenticate to Azure OpenAI as the gateway's managed identity.
+             Key auth is disabled on the account, so this is the only way in. -->
+        <authentication-managed-identity resource="https://cognitiveservices.azure.com" />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

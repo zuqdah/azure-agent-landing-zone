@@ -1,0 +1,43 @@
+variable "location" {
+  description = "Region for the state account and the lab resource group."
+  type        = string
+  default     = "eastus2"
+}
+
+variable "github_repository" {
+  description = "owner/name of the repository whose workflows may deploy."
+  type        = string
+  default     = "zuqdah/azure-agent-landing-zone"
+}
+
+variable "github_environment" {
+  description = "GitHub environment that deploy and destroy jobs run in."
+  type        = string
+  default     = "lab"
+}
+
+variable "monthly_budget_usd" {
+  description = "Monthly subscription budget. Alerts fire at 50%, 80%, and 100% of actual spend, and at 100% forecast."
+  type        = number
+  default     = 10
+}
+
+variable "budget_contact_emails" {
+  description = "Addresses that receive budget alerts."
+  type        = list(string)
+}
+
+variable "purge_actions" {
+  description = "Subscription-scoped actions needed to purge soft-deleted lab resources on teardown."
+  type        = list(string)
+  default = [
+    "Microsoft.KeyVault/locations/deletedVaults/read",
+    "Microsoft.KeyVault/locations/deletedVaults/purge/action",
+    "Microsoft.KeyVault/locations/operationResults/read",
+    "Microsoft.CognitiveServices/locations/resourceGroups/deletedAccounts/read",
+    "Microsoft.CognitiveServices/locations/resourceGroups/deletedAccounts/delete",
+    "Microsoft.ApiManagement/deletedservices/read",
+    "Microsoft.ApiManagement/locations/deletedservices/read",
+    "Microsoft.ApiManagement/locations/deletedservices/delete",
+  ]
+}

@@ -1,0 +1,30 @@
+<policies>
+    <inbound>
+        <base />
+        <!-- Burst control: calls per subscription per minute. -->
+        <rate-limit calls="${rate_limit_calls}" renewal-period="60" />
+        <!-- Spend control: calls per subscription per day. With the app's
+             per-request token ceiling, this bounds the worst-case daily cost. -->
+        <quota calls="${daily_quota_calls}" renewal-period="86400" />
+%{ if token_limit_enabled ~}
+        <!-- Token-aware limits. Not available on the Consumption gateway, so
+             Terraform only renders this block on classic and v2 tiers. -->
+        <llm-token-limit counter-key="@(context.Subscription.Id)"
+            tokens-per-minute="${tokens_per_minute}"
+            token-quota="${daily_token_quota}"
+            token-quota-period="Daily"
+            estimate-prompt-tokens="false"
+            remaining-tokens-header-name="x-ratelimit-remaining-tokens"
+            tokens-consumed-header-name="x-tokens-consumed" />
+%{ endif ~}
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

@@ -1,0 +1,128 @@
+name: Deploy
+
+# Manual only. Nothing in this repository spends money on a push.
+on:
+  workflow_dispatch:
+    inputs:
+      apim_sku_name:
+        description: "API Management tier. Developer_1 enables token limits but bills hourly and takes 30-45 minutes to create."
+        type: choice
+        default: Consumption_0
+        options:
+          - Consumption_0
+          - Developer_1
+
+# Deploy and destroy share one queue so they never overlap.
+concurrency:
+  group: agentlz-infra
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_VERSION: "1.16.3"
+  IMAGE: ghcr.io/${{ github.repository_owner }}/agent-lz-app
+
+jobs:
+  image:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ env.IMAGE }}:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: app
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+  apply:
+    name: Terraform apply and smoke test
+    needs: image
+    runs-on: ubuntu-latest
+    environment: lab
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Init
+        run: >-
+          terraform init -input=false
+          -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}"
+          -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
+          -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}"
+          -backend-config="key=infra.tfstate"
+
+      - name: Apply
+        run: >-
+          terraform apply -input=false -auto-approve -lock-timeout=5m
+          -var="resource_group_name=${{ vars.LAB_RESOURCE_GROUP }}"
+          -var="publisher_email=${{ vars.PUBLISHER_EMAIL }}"
+          -var="app_image=${{ needs.image.outputs.ref }}"
+          -var="apim_sku_name=${{ inputs.apim_sku_name }}"
+
+      - name: Smoke test
+        run: |
+          url=$(terraform output -raw app_url)
+
+          # The app scales to zero, so the first request waits for a cold start.
+          for i in $(seq 1 30); do
+            if curl -fsS "$url/healthz" >/dev/null; then break; fi
+            sleep 10
+          done
+          curl -fsS "$url/healthz"
+
+          # End to end: app -> Key Vault-referenced key -> gateway -> managed
+          # identity -> model.
+          response=$(curl -fsS -X POST "$url/chat" \
+            -H 'content-type: application/json' \
+            -d '{"message": "In one sentence, what is a landing zone?"}')
+          echo "$response"
+          echo "$response" | jq -e '.reply | length > 0' >/dev/null
+
+          {
+            echo "### Deployed"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| App | $url |"
+            echo "| API Management tier | $(terraform output -raw apim_sku_name) |"
+            echo "| Token limits active | $(terraform output -raw token_limit_enabled) |"
+            echo "| Smoke test tokens | $(echo "$response" | jq '.usage.total_tokens') |"
+            echo ""
+            echo "The nightly teardown removes everything at 07:00 UTC. Run **Destroy** to remove it sooner."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -38,9 +38,10 @@ variable "deployment_name" {
   type        = string
 }
 
-variable "openai_api_version" {
-  description = "Azure OpenAI data-plane API version."
+variable "reasoning_effort" {
+  description = "Reasoning effort the app requests from the model."
   type        = string
+  default     = "none"
 }
 
 variable "apim_key_secret_id" {

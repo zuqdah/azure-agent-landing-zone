@@ -9,9 +9,9 @@ import main
 def env(monkeypatch):
     monkeypatch.setenv("OPENAI_ENDPOINT", "https://apim-test.azure-api.net/")
     monkeypatch.setenv("OPENAI_DEPLOYMENT", "chat")
-    monkeypatch.setenv("OPENAI_API_VERSION", "2024-10-21")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("MAX_OUTPUT_TOKENS", "123")
+    monkeypatch.setenv("REASONING_EFFORT", "low")
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def fake_upstream(monkeypatch, status=200, json=None, headers=None, raises=None)
 
 
 COMPLETION = {
-    "choices": [{"message": {"role": "assistant", "content": "Hello from the lab."}}],
+    "choices": [{"message": {"role": "assistant", "content": "Hello from the lab."}, "finish_reason": "stop"}],
     "usage": {"prompt_tokens": 30, "completion_tokens": 6, "total_tokens": 36},
 }
 
@@ -59,15 +59,50 @@ def test_chat_returns_reply_and_usage(client, monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "reply": "Hello from the lab.",
+        "finish_reason": "stop",
         "usage": {"prompt_tokens": 30, "completion_tokens": 6, "total_tokens": 36},
     }
     assert sent["message"] == "hi"
     assert sent["settings"].max_output_tokens == 123
+    assert sent["settings"].reasoning_effort == "low"
 
 
-def test_chat_url_targets_gateway_deployment():
+def test_chat_url_uses_v1_api_on_gateway():
     settings = main.Settings.from_env()
-    assert settings.chat_url == "https://apim-test.azure-api.net/openai/deployments/chat/chat/completions"
+    assert settings.chat_url == "https://apim-test.azure-api.net/openai/v1/chat/completions"
+
+
+def test_request_uses_reasoning_model_parameters(monkeypatch):
+    captured = {}
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return httpx.Response(200, json=COMPLETION, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(main.httpx, "post", fake_post)
+    main.send_chat(main.Settings.from_env(), "hi")
+
+    body = captured["json"]
+    assert body["model"] == "chat"
+    assert body["max_completion_tokens"] == 123
+    assert body["reasoning_effort"] == "low"
+    assert "max_tokens" not in body, "reasoning models reject max_tokens"
+    assert "params" not in captured, "the v1 API takes no api-version"
+    assert captured["headers"] == {"api-key": "test-key"}
+
+
+def test_reasoning_that_hits_the_cap_returns_empty_reply(client, monkeypatch):
+    truncated = {
+        "choices": [{"message": {"role": "assistant", "content": None}, "finish_reason": "length"}],
+        "usage": {"prompt_tokens": 30, "completion_tokens": 123, "total_tokens": 153},
+    }
+    fake_upstream(monkeypatch, json=truncated)
+
+    response = client.post("/chat", json={"message": "hi"})
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == ""
+    assert response.json()["finish_reason"] == "length"
 
 
 @pytest.mark.parametrize("message", ["", "x" * (main.MAX_INPUT_CHARS + 1)])

@@ -60,8 +60,8 @@ resource "azurerm_container_app" "this" {
         value = var.deployment_name
       }
       env {
-        name  = "OPENAI_API_VERSION"
-        value = var.openai_api_version
+        name  = "REASONING_EFFORT"
+        value = var.reasoning_effort
       }
       env {
         name  = "MAX_OUTPUT_TOKENS"

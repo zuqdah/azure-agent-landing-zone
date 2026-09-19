@@ -12,7 +12,7 @@ flowchart LR
         app["Container App<br/>scale 0-1<br/>user-assigned identity"]
         kv[("Key Vault<br/>RBAC only")]
         apim["API Management<br/>product: rate limit + daily quota"]
-        oai["Azure OpenAI<br/>gpt-4.1-mini<br/>key auth disabled"]
+        oai["Azure OpenAI<br/>gpt-5.4-mini (US data zone)<br/>key auth disabled"]
         obs["Log Analytics +<br/>Application Insights"]
     end
 
@@ -58,14 +58,14 @@ Prices are pay-as-you-go retail rates for East US 2 from the Azure Retail Prices
 | Resource | Rate | Lab cost |
 |---|---|---|
 | Container Apps (Consumption) | $0.000024 per vCPU-second active; $0.40 per million requests | Scales to zero; a lab session fits in the monthly free grant |
-| Azure OpenAI gpt-4.1-mini (Global Standard) | $0.40 per 1M input tokens, $1.60 per 1M output tokens | Fractions of a cent per request |
+| Azure OpenAI gpt-5.4-mini (Data Zone Standard) | $0.825 per 1M input tokens, $4.95 per 1M output tokens | About a tenth of a cent per request |
 | API Management Consumption | First 1M calls free, then $0.035 per 10K | $0 |
 | API Management Developer (optional) | $0.0658 per hour | ~$1.58 per day; only when chosen for a token-limit demo |
 | Log Analytics | First 5 GB per month free, then $2.76 per GB | $0; ingestion is capped at 0.1 GB per day |
 | Key Vault (Standard) | $0.03 per 10K operations | Effectively $0 |
 | Terraform state (Storage, LRS) | Per GB stored | Under $0.10 per month |
 
-**Worst case, by construction.** The gateway allows 200 calls per day. Input is capped at 2,000 characters and output at 300 tokens per call, so a full day of abuse costs at most about 200 × (≈550 input + 300 output tokens) ≈ **$0.14**. The nightly teardown means nothing runs longer than a day, and a subscription budget alerts at $5, $8, and $10.
+**Worst case, by construction.** The gateway allows 200 calls per day. Input is capped at 2,000 characters, and `max_completion_tokens` caps each response at 300 tokens, reasoning included. A full day of abuse costs at most about 200 × (≈550 input + 300 output tokens) ≈ **$0.39**. The nightly teardown means nothing runs longer than a day, and a subscription budget alerts at $5, $8, and $10.
 
 ## How to run it
 
@@ -105,6 +105,8 @@ Prices are pay-as-you-go retail rates for East US 2 from the Azure Retail Prices
 - **API Management Consumption by default.** It costs nothing at lab volume, but it can't run `llm-token-limit`, so the default build caps spend with a call quota plus a per-request token ceiling instead. Choosing `Developer_1` in the Deploy workflow switches on token-aware limits with no code change.
 - **Public endpoints, strong identity.** Private endpoints cost about $7 a month each, and the Consumption tiers can't join a virtual network. Here the controls are identity instead: key auth is off on Azure OpenAI, Key Vault is RBAC-only, and state storage accepts Entra ID only. Private networking is the production step, and every module exposes a `public_network_access_enabled` switch for it.
 - **Fresh names on each deploy.** Soft-deleted Key Vaults and Azure OpenAI accounts reserve their names, so a random suffix avoids collisions. A narrowly scoped custom role lets the pipeline purge them on destroy.
+- **gpt-5.4-mini in the US data zone.** New pay-as-you-go subscriptions get model quota per model and deployment type, not across the board. When this was built, gpt-4.1-mini had moved to legacy with no quota for new subscriptions, and gpt-5.4-mini, the newest generally available mini model (retiring September 2027), had quota only as Data Zone Standard. That also keeps processing inside the US.
+- **The v1 API, reasoning off by default.** The app calls `/openai/v1/chat/completions`, so there's no dated `api-version` to expire. Reasoning models require `max_completion_tokens`, which counts reasoning tokens against the cap, so the app requests `reasoning_effort: "none"` by default. The whole budget goes to the answer, and the cost ceiling above holds. Changing it is one Terraform variable.
 - **Budget in bootstrap, not infra.** Anything the nightly teardown destroys can't also be the thing watching spend.
 - **Token metrics come later.** Emitting per-subscription token metrics from API Management needs a diagnostic setting azurerm 5.6 doesn't expose. It arrives in the AIOps lab, where the dashboards live.
 

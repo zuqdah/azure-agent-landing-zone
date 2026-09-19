@@ -60,8 +60,8 @@ resource "azurerm_api_management_api" "openai" {
   protocols             = ["https"]
   subscription_required = true
 
-  # Callers send their gateway key in the same header the OpenAI SDKs use, so
-  # the stock SDK works against the gateway without modification.
+  # Callers send their gateway key in the api-key header, the same header
+  # Azure OpenAI uses for key authentication.
   subscription_key_parameter_names {
     header = "api-key"
     query  = "api-key"
@@ -75,13 +75,10 @@ resource "azurerm_api_management_api_operation" "chat_completions" {
   resource_group_name = var.resource_group_name
   display_name        = "Create chat completion"
   method              = "POST"
-  url_template        = "/deployments/{deployment-id}/chat/completions"
 
-  template_parameter {
-    name     = "deployment-id"
-    required = true
-    type     = "string"
-  }
+  # The v1 API: no dated api-version, and the deployment is named in the
+  # request body.
+  url_template = "/v1/chat/completions"
 }
 
 # Request telemetry to Application Insights: status, latency, and backend

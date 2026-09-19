@@ -53,6 +53,7 @@ module "openai" {
   resource_group_name = data.azurerm_resource_group.lab.name
   model_name          = var.model_name
   model_version       = var.model_version
+  deployment_sku      = var.model_deployment_sku
   capacity_ktpm       = var.model_capacity_ktpm
   tags                = local.tags
 }
@@ -151,7 +152,7 @@ module "app" {
   image                      = var.app_image
   gateway_url                = module.apim.gateway_url
   deployment_name            = module.openai.deployment_name
-  openai_api_version         = var.openai_api_version
+  reasoning_effort           = var.reasoning_effort
   apim_key_secret_id         = azurerm_key_vault_secret.apim_key.versionless_id
   max_output_tokens          = var.max_output_tokens
   tags                       = local.tags

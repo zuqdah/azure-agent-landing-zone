@@ -36,13 +36,19 @@ variable "apim_sku_name" {
 variable "model_name" {
   description = "Model to deploy."
   type        = string
-  default     = "gpt-4.1-mini"
+  default     = "gpt-5.4-mini"
 }
 
 variable "model_version" {
   description = "Model version to deploy."
   type        = string
-  default     = "2025-04-14"
+  default     = "2026-03-17"
+}
+
+variable "model_deployment_sku" {
+  description = "Deployment type. New pay-as-you-go subscriptions receive quota per model and type, so check az cognitiveservices usage list before changing it."
+  type        = string
+  default     = "DataZoneStandard"
 }
 
 variable "model_capacity_ktpm" {
@@ -51,10 +57,15 @@ variable "model_capacity_ktpm" {
   default     = 5
 }
 
-variable "openai_api_version" {
-  description = "Azure OpenAI data-plane API version the app requests."
+variable "reasoning_effort" {
+  description = "Reasoning effort the app requests. \"none\" skips reasoning, so the whole token budget goes to the answer."
   type        = string
-  default     = "2024-10-21"
+  default     = "none"
+
+  validation {
+    condition     = contains(["none", "low", "medium", "high"], var.reasoning_effort)
+    error_message = "Use none, low, medium, or high."
+  }
 }
 
 variable "rate_limit_calls_per_minute" {

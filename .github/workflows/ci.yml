@@ -53,6 +53,11 @@ jobs:
   app:
     name: App tests and image build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/agent-lz-app
     steps:
       - uses: actions/checkout@v7
 
@@ -67,7 +72,25 @@ jobs:
           python -m pytest -q
 
       - name: Build image
-        run: docker build -t agent-lz-app:ci app
+        run: >-
+          docker build app
+          --tag "$IMAGE:${{ github.sha }}"
+          --tag "$IMAGE:latest"
+          --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+
+      # Publishing from main means the package exists before the first
+      # deploy, so it can be made public once and pulled without credentials.
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push --all-tags "$IMAGE"
 
   plan:
     name: Terraform plan

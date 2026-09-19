@@ -25,23 +25,25 @@ SYSTEM_PROMPT = (
 class Settings:
     endpoint: str
     deployment: str
-    api_version: str
     api_key: str
     max_output_tokens: int
+    reasoning_effort: str
 
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
             endpoint=os.environ["OPENAI_ENDPOINT"].rstrip("/"),
             deployment=os.environ["OPENAI_DEPLOYMENT"],
-            api_version=os.environ["OPENAI_API_VERSION"],
             api_key=os.environ["OPENAI_API_KEY"],
             max_output_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "300")),
+            reasoning_effort=os.environ.get("REASONING_EFFORT", "none"),
         )
 
     @property
     def chat_url(self) -> str:
-        return f"{self.endpoint}/openai/deployments/{self.deployment}/chat/completions"
+        # The v1 API: no dated api-version, and the deployment is named in the
+        # request body rather than the path.
+        return f"{self.endpoint}/openai/v1/chat/completions"
 
 
 class ChatRequest(BaseModel):
@@ -56,6 +58,7 @@ class Usage(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    finish_reason: str | None
     usage: Usage
 
 
@@ -66,18 +69,20 @@ def send_chat(settings: Settings, message: str) -> httpx.Response:
     """POST one chat completion to the gateway. Replaced in tests."""
     return httpx.post(
         settings.chat_url,
-        params={"api-version": settings.api_version},
         headers={"api-key": settings.api_key},
         json={
+            "model": settings.deployment,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": message},
             ],
             # Every request is capped, so the gateway's call quota also
-            # bounds worst-case token spend.
-            "max_tokens": settings.max_output_tokens,
+            # bounds worst-case token spend. For reasoning models this cap
+            # covers reasoning tokens as well as the visible answer.
+            "max_completion_tokens": settings.max_output_tokens,
+            "reasoning_effort": settings.reasoning_effort,
         },
-        timeout=30.0,
+        timeout=60.0,
     )
 
 
@@ -94,6 +99,7 @@ def info() -> dict:
         "deployment": settings.deployment,
         "gateway": httpx.URL(settings.endpoint).host,
         "max_output_tokens": settings.max_output_tokens,
+        "reasoning_effort": settings.reasoning_effort,
         "try": 'POST /chat {"message": "..."}',
     }
 
@@ -120,7 +126,11 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=502, detail="The model gateway returned an error.")
 
     body = upstream.json()
+    choice = body["choices"][0]
     return ChatResponse(
-        reply=body["choices"][0]["message"]["content"],
+        # A reasoning model that exhausts its token cap while thinking returns
+        # no visible content and finish_reason "length".
+        reply=choice["message"].get("content") or "",
+        finish_reason=choice.get("finish_reason"),
         usage=Usage(**{k: body["usage"][k] for k in Usage.model_fields}),
     )

@@ -22,19 +22,19 @@ variable "deployment_name" {
 variable "model_name" {
   description = "Model to deploy."
   type        = string
-  default     = "gpt-4.1-mini"
+  default     = "gpt-5.4-mini"
 }
 
 variable "model_version" {
   description = "Model version to deploy."
   type        = string
-  default     = "2025-04-14"
+  default     = "2026-03-17"
 }
 
 variable "deployment_sku" {
-  description = "Deployment type. GlobalStandard is pay-per-token with no hourly charge."
+  description = "Deployment type. DataZoneStandard and GlobalStandard are both pay-per-token with no hourly charge; DataZoneStandard keeps processing inside the US data zone."
   type        = string
-  default     = "GlobalStandard"
+  default     = "DataZoneStandard"
 }
 
 variable "capacity_ktpm" {

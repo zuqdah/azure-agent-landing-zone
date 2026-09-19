@@ -99,7 +99,10 @@ jobs:
           ids=$(az resource list -g "${{ vars.LAB_RESOURCE_GROUP }}" \
             --query "[?type=='microsoft.alertsmanagement/smartDetectorAlertRules' || type=='microsoft.insights/actiongroups'].id" -o tsv)
           if [ -n "$ids" ]; then
-            echo "$ids" | xargs az resource delete --ids
+            # One ID per line; the action group's name contains spaces.
+            while IFS= read -r id; do
+              az resource delete --ids "$id"
+            done <<< "$ids"
             echo "Removed $(echo "$ids" | wc -l) auto-created alert resources."
           else
             echo "Nothing to sweep."

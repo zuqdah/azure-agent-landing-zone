@@ -31,9 +31,11 @@ variable "purge_actions" {
   description = "Subscription-scoped actions needed to purge soft-deleted lab resources on teardown."
   type        = list(string)
   default = [
+    "Microsoft.KeyVault/deletedVaults/read",
     "Microsoft.KeyVault/locations/deletedVaults/read",
     "Microsoft.KeyVault/locations/deletedVaults/purge/action",
     "Microsoft.KeyVault/locations/operationResults/read",
+    "Microsoft.CognitiveServices/deletedAccounts/read",
     "Microsoft.CognitiveServices/locations/resourceGroups/deletedAccounts/read",
     "Microsoft.CognitiveServices/locations/resourceGroups/deletedAccounts/delete",
     "Microsoft.ApiManagement/deletedservices/read",

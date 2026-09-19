@@ -24,15 +24,19 @@ provider "azurerm" {
   # Register exactly the resource providers the lab uses. The pipeline
   # identity has no rights to do this itself.
   resource_providers_to_register = [
+    "Microsoft.AlertsManagement",
     "Microsoft.ApiManagement",
     "Microsoft.App",
     "Microsoft.CognitiveServices",
     "Microsoft.Consumption",
-    "Microsoft.Insights",
     "Microsoft.KeyVault",
     "Microsoft.ManagedIdentity",
     "Microsoft.OperationalInsights",
     "Microsoft.Storage",
+    # Azure returns this namespace in lowercase, and the provider matches names
+    # case-sensitively. Written as "Microsoft.Insights" it is silently skipped
+    # (azurerm logs a warning), and Application Insights fails to deploy.
+    "microsoft.insights",
   ]
 
   # The state account has shared keys disabled, so data-plane calls must use

@@ -83,7 +83,12 @@ jobs:
           # azurerm occasionally fails while polling a delete that Azure has
           # already accepted (seen with Container Apps). A second pass
           # refreshes state and finishes; a real failure fails again.
-          destroy || { echo "::warning::Destroy failed once; retrying."; sleep 30; destroy; }
+          for attempt in 1 2 3; do
+            if destroy; then exit 0; fi
+            echo "::warning::Destroy attempt $attempt failed; retrying."
+            sleep 30
+          done
+          destroy
 
       - uses: azure/login@v3
         with:

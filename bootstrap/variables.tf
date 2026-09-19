@@ -10,6 +10,16 @@ variable "github_repository" {
   default     = "zuqdah/azure-agent-landing-zone"
 }
 
+variable "github_repository_owner_id" {
+  description = "Numeric ID of the repository owner: gh api repos/<owner>/<repo> --jq .owner.id"
+  type        = number
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the repository: gh api repos/<owner>/<repo> --jq .id"
+  type        = number
+}
+
 variable "github_environment" {
   description = "GitHub environment that deploy and destroy jobs run in."
   type        = string

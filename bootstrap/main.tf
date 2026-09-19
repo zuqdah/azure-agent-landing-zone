@@ -9,6 +9,13 @@ locals {
     layer      = "bootstrap"
   }
 
+  # GitHub issues OIDC subjects keyed on immutable owner and repository IDs,
+  # e.g. repo:owner@123/name@456:environment:lab. A deleted-and-recreated
+  # repository with the same name gets a new ID and can't sign in.
+  github_owner   = split("/", var.github_repository)[0]
+  github_repo    = split("/", var.github_repository)[1]
+  subject_prefix = "repo:${local.github_owner}@${var.github_repository_owner_id}/${local.github_repo}@${var.github_repository_id}"
+
   # Roles the pipeline is allowed to grant, and nothing else.
   delegable_roles = [
     "Cognitive Services OpenAI User",
@@ -120,7 +127,7 @@ resource "azuread_application_federated_identity_credential" "environment" {
   description    = "Deploy and destroy jobs running in the ${var.github_environment} environment."
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_repository}:environment:${var.github_environment}"
+  subject        = "${local.subject_prefix}:environment:${var.github_environment}"
 }
 
 resource "azuread_application_federated_identity_credential" "pull_request" {
@@ -129,7 +136,7 @@ resource "azuread_application_federated_identity_credential" "pull_request" {
   description    = "Plan jobs on pull requests."
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_repository}:pull_request"
+  subject        = "${local.subject_prefix}:pull_request"
 }
 
 # ---------------------------------------------------------------------------

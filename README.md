@@ -79,6 +79,8 @@ Prices are pay-as-you-go retail rates for East US 2 from the Azure Retail Prices
    terraform apply -var='budget_contact_emails=["you@example.com"]' \
                    -var='github_repository=<owner>/<repo>'
    ```
+   GitHub identifies repositories to Azure by immutable numeric IDs (for example `repo:owner@123/name@456:environment:lab`), so a deleted and recreated repository with the same name can't inherit this trust. Create the repository before running bootstrap so the IDs exist.
+   ```
 2. **Configure GitHub.** Create an environment named `lab`, then add these repository variables from the bootstrap outputs. None of them are secrets.
 
    | Variable | Bootstrap output |

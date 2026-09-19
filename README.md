@@ -36,6 +36,31 @@ flowchart LR
 | **Policy as code** | `terraform fmt`, `validate`, TFLint, and Checkov on every push. Every Checkov exception is justified inline, next to the resource it applies to. |
 | **Gateway governance** | API Management products, subscriptions, rate limits, and quotas. The token-aware `llm-token-limit` policy renders automatically on tiers that support it. |
 
+## Verified on a live deployment
+
+Checked against the deployed environment on 2026-09-19, not just in code review.
+
+**End to end.** The Deploy workflow's smoke test sends a question through the app, the Key Vault-referenced gateway key, API Management, and managed identity to the model:
+
+> "A landing zone is a secure, preconfigured cloud environment that provides the foundational networking, identity, security, and governance setup for deploying workloads." (71 tokens)
+
+**The controls refuse what they should.**
+
+| Attempt | Result |
+|---|---|
+| Call the gateway with no key, or a forged one | `401` |
+| Call Azure OpenAI directly with no credentials | `401` |
+| Call Azure OpenAI directly with an API key | `401`: key authentication is disabled |
+| Call Azure OpenAI directly **as the subscription Owner** | `PermissionDenied`: Owner controls the resource, not its data. Only the gateway's managed identity holds `Cognitive Services OpenAI User`. |
+
+**Two layers of throttling, both observed.** Twelve rapid requests through the gateway:
+
+| Calls | Outcome |
+|---|---|
+| 1–6 | `200` |
+| 7–10 | `429` from **Azure OpenAI itself**: the deployment's capacity setting caps this model at about 6 requests a minute |
+| 11–12 | `429` from **the API Management policy**, which counted all ten attempts and blocked the eleventh as configured |
+
 ## Repository layout
 
 ```
@@ -98,7 +123,7 @@ Prices are pay-as-you-go retail rates for East US 2 from the Azure Retail Prices
 3. **Deploy.** Run the **Deploy** workflow. It builds the image, applies Terraform, and runs an end-to-end smoke test through the whole identity chain.
 4. **Tear down.** Run **Destroy**, or let the nightly schedule do it.
 
-> The first deploy publishes the container image to GitHub Packages as private. Make the package public once (package settings → Change visibility) so Container Apps can pull it without registry credentials.
+> CI publishes the container image to GitHub Packages on every push to `main`. A package linked to a public repository is public, so Container Apps pulls it without registry credentials. If yours ends up private, make it public once under the package's settings.
 
 ## Design decisions
 

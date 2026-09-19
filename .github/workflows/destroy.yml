@@ -74,10 +74,37 @@ jobs:
 
       - name: Destroy
         if: steps.state.outputs.resources != '0'
-        run: >-
-          terraform destroy -input=false -auto-approve -lock-timeout=5m
-          -var="resource_group_name=${{ vars.LAB_RESOURCE_GROUP }}"
-          -var="publisher_email=${{ vars.PUBLISHER_EMAIL }}"
+        run: |
+          destroy() {
+            terraform destroy -input=false -auto-approve -lock-timeout=5m \
+              -var="resource_group_name=${{ vars.LAB_RESOURCE_GROUP }}" \
+              -var="publisher_email=${{ vars.PUBLISHER_EMAIL }}"
+          }
+          # azurerm occasionally fails while polling a delete that Azure has
+          # already accepted (seen with Container Apps). A second pass
+          # refreshes state and finishes; a real failure fails again.
+          destroy || { echo "::warning::Destroy failed once; retrying."; sleep 30; destroy; }
+
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Creating Application Insights makes Azure add a smart-detection alert
+      # rule and action group that Terraform doesn't manage. Remove exactly
+      # those types so a teardown leaves the lab resource group empty.
+      - name: Sweep auto-created alert resources
+        run: |
+          ids=$(az resource list -g "${{ vars.LAB_RESOURCE_GROUP }}" \
+            --query "[?type=='microsoft.alertsmanagement/smartDetectorAlertRules' || type=='microsoft.insights/actiongroups'].id" -o tsv)
+          if [ -n "$ids" ]; then
+            echo "$ids" | xargs az resource delete --ids
+            echo "Removed $(echo "$ids" | wc -l) auto-created alert resources."
+          else
+            echo "Nothing to sweep."
+          fi
+          echo "Remaining in ${{ vars.LAB_RESOURCE_GROUP }}: $(az resource list -g "${{ vars.LAB_RESOURCE_GROUP }}" --query 'length(@)' -o tsv)"
 
       - name: Summary
         run: |

@@ -122,6 +122,7 @@ resource "azuread_service_principal" "deployer" {
 # GitHub mints a short-lived token that names the repo and the job's
 # context; Entra ID exchanges it only when the subject matches exactly.
 resource "azuread_application_federated_identity_credential" "environment" {
+  #checkov:skip=CKV_AZURE_249:False positive. The check's repo pattern predates GitHub's immutable subject format (owner@id/repo@id) and rejects the "@". The subject names one exact repository with no wildcards.
   application_id = azuread_application.deployer.id
   display_name   = "github-${var.github_environment}-environment"
   description    = "Deploy and destroy jobs running in the ${var.github_environment} environment."
@@ -131,6 +132,7 @@ resource "azuread_application_federated_identity_credential" "environment" {
 }
 
 resource "azuread_application_federated_identity_credential" "pull_request" {
+  #checkov:skip=CKV_AZURE_249:False positive. The check's repo pattern predates GitHub's immutable subject format (owner@id/repo@id) and rejects the "@". The subject names one exact repository with no wildcards.
   application_id = azuread_application.deployer.id
   display_name   = "github-pull-request"
   description    = "Plan jobs on pull requests."
